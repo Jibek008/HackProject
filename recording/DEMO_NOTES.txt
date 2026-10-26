@@ -1,0 +1,30 @@
+﻿=== ДЕМОНСТРАЦИЯ SQL Injection Lab ===
+Дата: 2026-10-24 15:30:32
+
+1. ЗАПУСК
+- cd C:\Users\user\PycharmProjects\Hack
+- .\.venv\Scripts\activate
+- py app.py
+- Открыть http://127.0.0.1:5000
+- Проверка: GET /api/health -> {"app":"SQL Injection Lab","status":"ok","version":"2.0"}
+
+2. УЯЗВИМЫЙ ВАРИАНТ (Vulnerable)
+- Вкладка/раздел Vulnerable Demo -> Login
+- Username: ' OR '1'='1' --
+- Password: x (любое)
+- Нажать Login
+- Результат: success=true, bypassed=true
+- SQL (из ответа): SELECT id, username, role FROM users WHERE username = '' OR '1'='1' --' AND password = 'x'
+- Причина: конкатенация, ' закрывает кавычку, OR '1'='1' делает условие истинным, -- комментирует остаток
+
+3. ЗАЩИЩЁННЫЙ ВАРИАНТ (Secure)
+- Вкладка/раздел Secure Demo -> Login
+- Те же данные: ' OR '1'='1' -- / x
+- Нажать Login
+- Результат: success=false, rows=[]
+- SQL (из ответа): SELECT id, username, role FROM users WHERE username = ? AND password = ?
+- Причина: параметризованный запрос, значения передаются отдельно как данные
+
+4. ВЫВОД
+- Защита: использовать параметризованные запросы (prepared statements)
+- Никогда не склеивать пользовательский ввод с SQL-строкой

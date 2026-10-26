@@ -1,0 +1,12 @@
+﻿Для записи экрана можно использовать встроенный инструмент Windows - Xbox Game Bar (Win+G).
+ИЛИ Problem Steps Recorder (psr.exe): Win+R -> psr.exe -> Start Record
+
+Демо-последовательность (фактическая по проекту):
+1. Открыть http://127.0.0.1:5000 (уже запущено)
+2. Vulnerable Demo -> Login
+3. Username: ' OR '1'='1' --  Password: x -> войти (успешно, обход)
+4. Secure Demo -> Login  
+5. Username: ' OR '1'='1' --  Password: x -> войти (запрещено)
+6. Объяснить разницу по блоку SQL запроса
+
+Приложение запущено в фоне. Видео сохранить в эту папку: C:\Users\user\PycharmProjects\Hack\recording\

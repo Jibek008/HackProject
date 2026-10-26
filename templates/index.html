@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Injection Lab — учебная лаборатория</title>
+    <meta name="description" content="Локальная учебная лаборатория: наглядная демонстрация SQL Injection и защиты через параметризованные запросы.">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+    <div class="container topbar-inner">
+        <div class="brand">
+            <span class="brand-mark">SQLi</span>
+            <div>
+                <h1 class="brand-title">SQL Injection Lab</h1>
+                <p class="brand-sub">Локальная учебная лаборатория · только 127.0.0.1 · вымышленные данные</p>
+            </div>
+        </div>
+        <div class="topbar-actions">
+            <nav class="nav" id="nav">
+                <a href="#overview" class="nav-link">Обзор</a>
+                <a href="#tour" class="nav-link">Мастер</a>
+                <a href="#compare" class="nav-link">Сравнение</a>
+                <a href="#techniques" class="nav-link">Техники</a>
+                <a href="#payloads" class="nav-link">Payload'ы</a>
+                <a href="#analyzer" class="nav-link">Анализатор</a>
+                <a href="#quiz" class="nav-link">Квиз</a>
+                <a href="#faq" class="nav-link">FAQ</a>
+            </nav>
+            <button type="button" class="icon-btn" id="themeToggle" title="Переключить тему (T)" aria-label="Переключить тему">◐</button>
+        </div>
+    </div>
+</header>
+
+<main class="container">
+
+    <!-- ============ 1. ОБЗОР ============ -->
+    <section class="card" id="overview">
+        <h2 class="section-title">Что это за лаборатория</h2>
+        <p class="lead">
+            Два <strong>одинаковых</strong> обработчика авторизации работают над <strong>одной</strong> базой.
+            Первый собирает SQL конкатенацией пользовательского ввода. Второй передаёт значения параметрами.
+            Всё, что здесь происходит, происходит на вашей машине, с вымышленными данными.
+        </p>
+
+        <div class="grid-3">
+            <div class="mini-card">
+                <div class="mini-badge badge-vuln">VULNERABLE</div>
+                <h3>Небезопасный режим</h3>
+                <p>Ввод попадает прямо в текст запроса и становится его частью. Условие <code>WHERE</code> можно изменить.</p>
+            </div>
+            <div class="mini-card">
+                <div class="mini-badge badge-sec">SECURE</div>
+                <h3>Защищённый режим</h3>
+                <p>Значения передаются отдельно от SQL. Строка ищется <em>буквально</em> — обход невозможен.</p>
+            </div>
+            <div class="mini-card">
+                <div class="mini-badge badge-neut">ЧТО ВНУТРИ</div>
+                <h3>Что можно изучить</h3>
+                <p>UNION, blind (boolean и time-based), error-based, раскрытие схемы, автоматическое извлечение секрета.</p>
+            </div>
+        </div>
+
+        <div class="flow-diagram" role="img" aria-label="Схема работы приложения">
+            <div class="flow-step">
+                <span class="flow-num">1</span>
+                <b>Браузер</b>
+                <small>форма логина</small>
+            </div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-step">
+                <span class="flow-num">2</span>
+                <b>Flask</b>
+                <small>POST /api/…/login</small>
+            </div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-step flow-split">
+                <span class="flow-num">3</span>
+                <b>Сборка SQL</b>
+                <small>
+                    <span class="tag-vuln">конкатенация</span>
+                    <span class="tag-sec">параметры</span>
+                </small>
+            </div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-step">
+                <span class="flow-num">4</span>
+                <b>SQLite</b>
+                <small>users + secrets</small>
+            </div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-step">
+                <span class="flow-num">5</span>
+                <b>Ответ</b>
+                <small>SQL, разбор, строки</small>
+            </div>
+        </div>
+
+        <div class="callout callout-warn">
+            <b>Что важно понять прочь.</b> Уязвимый обработчик существует <em>только</em> для демонстрации.
+            В реальном приложении такой код недопустим. Защищённый обработчик — единственно верный образец.
+        </div>
+    </section>
+
+    <!-- ============ 2. ЦЕЛЬ АТАКИ ============ -->
+    <section class="card" id="target">
+        <h2 class="section-title">Цель атаки</h2>
+        <p class="lead">
+            Прежде чем что-то атаковать, стоит увидеть, что именно лежит в базе.
+            Все данные здесь вымышленные — реальных учётных записей в лаборатории нет.
+        </p>
+        <div id="schemaBlock" class="schema-block">
+            <div class="loader">Загрузка схемы…</div>
+        </div>
+    </section>
+
+    <!-- ============ 3. МАСТЕР ДЕМОНСТРАЦИИ ============ -->
+    <section class="card" id="tour">
+        <div class="card-header">
+            <h2 class="section-title">Мастер демонстрации</h2>
+            <div class="tour-progress">
+                <span id="tourStepLabel">Шаг 1 из 8</span>
+                <div class="progress"><div class="progress-bar" id="tourProgress"></div></div>
+            </div>
+        </div>
+        <p class="lead">
+            Восемь шагов, которые стоит пройти целиком. На каждом шаге объясняется, <em>что</em> вы увидите
+            и <em>почему</em> это происходит.
+        </p>
+
+        <div class="tour-body">
+            <ol class="tour-steps" id="tourSteps"></ol>
+            <div class="tour-panel">
+                <div class="tour-hint" id="tourHint"></div>
+                <div class="tour-actions">
+                    <button type="button" class="btn btn-ghost" id="tourPrev">← Назад</button>
+                    <button type="button" class="btn btn-primary" id="tourNext">Далее →</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ 4. СРАВНЕНИЕ ДВУХ ДВИЖКОВ ============ -->
+    <section class="card" id="compare">
+        <h2 class="section-title">Один ввод — два движка</h2>
+        <p class="lead">
+            Введите что угодно один раз и нажмите кнопку — лаборатория отправит <em>тот же самый</em> ввод
+            в оба обработчика и покажет разницу в таблице. Это самый быстрый способ увидеть контраст.
+        </p>
+
+        <form id="compareForm" class="grid grid-2" autocomplete="off">
+            <label>
+                Имя пользователя
+                <input type="text" id="cmpUser" name="username" placeholder="student" required>
+            </label>
+            <label>
+                Пароль
+                <input type="text" id="cmpPass" name="password" placeholder="lab_pass_123" required>
+            </label>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Сравнить оба режима</button>
+                <button type="button" class="btn btn-ghost" id="cmpPayload">Подставить payload</button>
+                <button type="button" class="btn btn-ghost" id="cmpReset">Сбросить</button>
+            </div>
+        </form>
+
+        <div id="compareResult" class="compare-result"></div>
+    </section>
+
+    <!-- ============ 5. ДЕТАЛЬНЫЕ ДЕМО ============ -->
+    <section class="card" id="demos">
+        <h2 class="section-title">Подробные демонстрации</h2>
+        <p class="lead">
+            Две карточки рядом: слева — небезопасная реализация, справа — защищённая.
+            В сгенерированном SQL ввод подсвечен красным, а код разработчика — белым.
+        </p>
+
+        <div class="demo-grid">
+            <!-- VULNERABLE -->
+            <div class="demo demo-vuln" id="vulnCard">
+                <div class="demo-head">
+                    <h3>Небезопасная реализация</h3>
+                    <span class="badge badge-vuln">VULNERABLE</span>
+                </div>
+                <p class="demo-note">SQL собирается конкатенацией: <code>WHERE username = '{u}' AND password = '{p}'</code></p>
+                <form id="vulnForm" class="grid grid-2" autocomplete="off">
+                    <label>Имя пользователя<input type="text" id="vulnUser" name="username" placeholder="student" required></label>
+                    <label>Пароль<input type="text" id="vulnPass" name="password" placeholder="lab_pass_123" required></label>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-vuln">Войти (уязвимый)</button>
+                        <button type="button" class="btn btn-ghost" data-payload="classic_or_bypass">Payload</button>
+                    </div>
+                </form>
+                <div class="sql-view" id="vulnSql"></div>
+                <div class="verdict" id="vulnVerdict"></div>
+                <div class="signals" id="vulnSignals"></div>
+                <div class="rows-wrap" id="vulnRowsWrap"></div>
+            </div>
+
+            <!-- SECURE -->
+            <div class="demo demo-sec" id="secureCard">
+                <div class="demo-head">
+                    <h3>Защищённая реализация</h3>
+                    <span class="badge badge-sec">SECURE</span>
+                </div>
+                <p class="demo-note">Параметризованный запрос: <code>WHERE username = ? AND password = ?</code></p>
+                <form id="secForm" class="grid grid-2" autocomplete="off">
+                    <label>Имя пользователя<input type="text" id="secUser" name="username" placeholder="student" required></label>
+                    <label>Пароль<input type="text" id="secPass" name="password" placeholder="lab_pass_123" required></label>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-sec">Войти (защищённый)</button>
+                        <button type="button" class="btn btn-ghost" data-payload="classic_or_bypass">Тот же payload</button>
+                    </div>
+                </form>
+                <div class="sql-view" id="secSql"></div>
+                <div class="verdict" id="secVerdict"></div>
+                <div class="signals" id="secSignals"></div>
+                <div class="rows-wrap" id="secRowsWrap"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ 6. ТЕХНИКИ ============ -->
+    <section class="card" id="techniques">
+        <h2 class="section-title">Дополнительные техники</h2>
+        <p class="lead">
+            Классический обход через <code>OR '1'='1'</code> — только самый простой случай.
+            Вкладки ниже показывают, как атакующий действует, когда прямой вывод данных недоступен.
+        </p>
+
+        <div class="tabs" role="tablist">
+            <button type="button" class="tab is-active" data-tab="union" role="tab">UNION</button>
+            <button type="button" class="tab" data-tab="blind" role="tab">Blind</button>
+            <button type="button" class="tab" data-tab="error" role="tab">Error-based</button>
+            <button type="button" class="tab" data-tab="time" role="tab">Time-based</button>
+        </div>
+
+        <!-- UNION -->
+        <div class="tab-panel is-active" data-panel="union">
+            <p class="tech-desc">
+                <b>Идея.</b> Команда <code>UNION</code> присоединяет к результату вторую выборку.
+                Если число колонок совпадает, подстановка проходит — и вместо <code>role</code> можно получить
+                что угодно, например содержимое другой таблицы.
+            </p>
+            <form class="tech-form" data-tech="union" autocomplete="off">
+                <label>Ввод в поле «имя пользователя»
+                    <input type="text" name="username" value="' UNION SELECT id, owner, content FROM secrets --">
+                </label>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-vuln">Выполнить в уязвимом режиме</button>
+                    <button type="submit" class="btn btn-sec" name="mode" value="secure">Тот же ввод в защищённом</button>
+                </div>
+            </form>
+            <div class="tech-out" data-out="union"></div>
+        </div>
+
+        <!-- BLIND -->
+        <div class="tab-panel" data-panel="blind">
+            <p class="tech-desc">
+                <b>Идея.</b> Если вывод данных заблокирован, остаётся канал «true или false».
+                Один запрос — один бит информации. Повторив такой запрос много раз, можно восстановить
+                значение целиком. Ниже — автоматический подбор символов.
+            </p>
+            <div class="blind-controls">
+                <label>Условие-проба
+                    <input type="text" id="blindCond" value="1=1">
+                </label>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-vuln" id="blindProbe">Проверить условие</button>
+                    <button type="button" class="btn btn-primary" id="blindExtract">Авто-извлечение секрета</button>
+                </div>
+            </div>
+            <div class="tech-out" data-out="blind"></div>
+            <div class="tech-out" data-out="extract"></div>
+        </div>
+
+        <!-- ERROR -->
+        <div class="tab-panel" data-panel="error">
+            <p class="tech-desc">
+                <b>Идея.</b> Некорректный ввод заставляет СУБД вернуть сообщение об ошибке.
+                Если приложение показывает этот текст пользователю, тот получает подсказки о структуре запроса.
+                Защищённый вариант заменяет ошибку нейтральным сообщением.
+            </p>
+            <form class="tech-form" data-tech="error" autocomplete="off">
+                <label>Ввод с лишней кавычкой
+                    <input type="text" name="username" value="oops'">
+                </label>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-vuln">Выполнить в уязвимом режиме</button>
+                    <button type="submit" class="btn btn-sec" name="mode" value="secure">Тот же ввод в защищённом</button>
+                </div>
+            </form>
+            <div class="tech-out" data-out="error"></div>
+        </div>
+
+        <!-- TIME -->
+        <div class="tab-panel" data-panel="time">
+            <p class="tech-desc">
+                <b>Идея.</b> Если условие медленное, а ответ — быстрый, по разнице во времени можно
+                судить, истинно ли условие. В SQLite нет <code>SLEEP()</code>, поэтому нагрузка
+                эмулируется генерацией большого объёма данных.
+            </p>
+            <div class="blind-controls">
+                <label>Объём нагрузки (байт)
+                    <input type="number" id="timeWorkload" value="20000000" min="0" step="1000000">
+                </label>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-vuln" id="timeRun">Измерить задержку</button>
+                </div>
+            </div>
+            <div class="tech-out" data-out="time"></div>
+        </div>
+    </section>
+
+    <!-- ============ 7. КАТАЛОГ PAYLOAD'ОВ ============ -->
+    <section class="card" id="payloads">
+        <h2 class="section-title">Каталог техник</h2>
+        <p class="lead">
+            Готовые примеры с пояснениями. Нажмите на карточку — ввод подставится в форму
+            сравнения, и можно сразу посмотреть, что получится.
+        </p>
+        <div class="payload-grid" id="payloadGrid">
+            <div class="loader">Загрузка каталога…</div>
+        </div>
+    </section>
+
+    <!-- ============ 8. АНАЛИЗАТОР ============ -->
+    <section class="card" id="analyzer">
+        <h2 class="section-title">Анализатор ввода</h2>
+        <p class="lead">
+            Вставьте любую строку — лаборатория разберёт её и покажет, какие конструкции в ней найдены.
+            Запрос к базе при этом <em>не</em> выполняется: это чистый статический анализ.
+        </p>
+        <form id="analyzeForm" class="grid grid-2" autocomplete="off">
+            <label>Имя пользователя<input type="text" id="anaUser" placeholder="student' OR '1'='1' --"></label>
+            <label>Пароль<input type="text" id="anaPass" placeholder="anything"></label>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Разобрать</button>
+                <button type="button" class="btn btn-ghost" id="anaClear">Очистить</button>
+            </div>
+        </form>
+        <div class="tech-out" data-out="analyze"></div>
+    </section>
+
+    <!-- ============ 9. КВИЗ ============ -->
+    <section class="card" id="quiz">
+        <h2 class="section-title">Проверь, что понял</h2>
+        <p class="lead">Шесть вопросов по материалу лаборатории. Ответы проверяются сразу.</p>
+        <div class="quiz-score" id="quizScore">Пройдено: 0 из 6</div>
+        <div id="quizBlock" class="quiz-block"></div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-ghost" id="quizReset">Начать заново</button>
+        </div>
+    </section>
+
+    <!-- ============ 10. ОТЧЁТ ============ -->
+    <section class="card" id="report">
+        <h2 class="section-title">Отчёт для лабораторной работы</h2>
+        <p class="lead">
+            Все проведённые эксперименты накапливаются в журнале. Кнопка собирает из него
+            готовый фрагмент Markdown — можно вставить в отчёт или в презентацию.
+        </p>
+        <div class="report-actions">
+            <button type="button" class="btn btn-primary" id="reportCopy">Скопировать отчёт в Markdown</button>
+            <button type="button" class="btn btn-ghost" id="reportDownload">Скачать файл</button>
+            <button type="button" class="btn btn-ghost" id="reportClear">Очистить журнал</button>
+        </div>
+        <pre class="code" id="reportPreview">Журнал пуст — проведите несколько экспериментов выше.</pre>
+    </section>
+
+    <!-- ============ 11. КОНСОЛЬ ============ -->
+    <section class="card" id="console">
+        <h2 class="section-title">Журнал запросов</h2>
+        <p class="lead">Все обращения к API с временными метками — удобно показывать во время защиты.</p>
+        <div class="console-actions">
+            <button type="button" class="btn btn-ghost" id="consoleClear">Очистить</button>
+        </div>
+        <div class="console" id="consoleBox"></div>
+    </section>
+
+    <!-- ============ 12. ОГРАНИЧЕНИЯ ============ -->
+    <section class="card" id="limits">
+        <h2 class="section-title">Ограничения и честные оговорки</h2>
+        <div class="grid-2">
+            <ul class="list">
+                <li><b>Только локально.</b> Сервер слушает исключительно <code>127.0.0.1</code>. Доступ из сети закрыт.</li>
+                <li><b>Учебный характер.</b> Уязвимый обработчик неприемлем в реальном приложении.</li>
+                <li><b>Вымышленные данные.</b> Реальных аккаунтов, паролей и внешних источников нет.</li>
+                <li><b>Изолированность.</b> Приложение не сканирует внешние системы и ничего никуда не отправляет.</li>
+            </ul>
+            <ul class="list">
+                <li><b>Пароли в открытом виде.</b> Сделано намеренно, чтобы показать принцип инъекции. В бою так нельзя.</li>
+                <li><b>Драйвер sqlite3.</b> Не поддерживает несколько операторов за вызов — stacked query блокируется.</li>
+                <li><b>Blind через двоичный поиск.</b> Это оптимизация лаборатории, а не эталонный медленный перебор.</li>
+                <li><b>Нагрузка ограничена.</b> Объём <code>randomblob</code> ограничен, чтобы сервер не подвисал.</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- ============ 13. FAQ ============ -->
+    <section class="card" id="faq">
+        <h2 class="section-title">Частые вопросы</h2>
+        <div class="faq-list">
+            <details>
+                <summary>Почему в уязвимом режиме показывается весь SQL?</summary>
+                <p>Чтобы разница была видна. В этом и состоит лаборатория: показать, как ввод меняет
+                текст запроса. В реальном приложении так никогда не делают — SQL пользователю не показывают.</p>
+            </details>
+            <details>
+                <summary>Почему пароль хранится в открытом виде?</summary>
+                <p>Чтобы изолированно показать принцип инъекции, не отвлекаясь на хэширование.
+                В настоящей системе пароли хранят только в виде стойких хэшей (bcrypt, argon2).</p>
+            </details>
+            <details>
+                <summary>А экранирование кавычек не спасло бы?</summary>
+                <p>Экранирование помогает, но это ручной контроль над каждым запросом: забыли
+                в одном месте — и уязвимость вернулась. Параметризация работает всегда, потому что
+                СУБД сама разделяет код и данные.</p>
+            </details>
+            <details>
+                <summary>Что значит «разделение кода и данных»?</summary>
+                <p>SQL-шаблон с плейсхолдерами <code>?</code> — это код. Значения, переданные параметрами, —
+                это данные. СУБД сначала разбирает шаблон, а потом подставляет значения, которые не могут
+                изменить его структуру.</p>
+            </details>
+            <details>
+                <summary>Почему уязвимый вариант всё равно в проекте?</summary>
+                <p>Чтобы было с чем сравнивать. Без живого примера обхода защиту невозможно прочувствовать —
+                разница между «работает» и «не работает» становится очевидной только на контрасте.</p>
+            </details>
+            <details>
+                <summary>Как запустить лабораторию заново?</summary>
+                <p><code>.\.venv\Scripts\activate</code>, затем <code>py app.py</code> и открыть
+                <code>http://127.0.0.1:5000</code>. База создаётся и заполняется автоматически при старте.</p>
+            </details>
+        </div>
+    </section>
+
+</main>
+
+<footer class="footer">
+    <div class="container">
+        <p>SQL Injection Lab — локальная учебная лаборатория. Не предназначена для публичного запуска.</p>
+        <p class="footer-meta">Только вымышленные данные · <code>127.0.0.1</code> · Flask + SQLite</p>
+    </div>
+</footer>
+
+<script src="{{ url_for('static', filename='js/analyzer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/tour.js') }}"></script>
+<script src="{{ url_for('static', filename='js/techniques.js') }}"></script>
+<script src="{{ url_for('static', filename='js/quiz.js') }}"></script>
+<script src="{{ url_for('static', filename='js/report.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
